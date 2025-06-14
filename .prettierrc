@@ -1,0 +1,12 @@
+{
+    "singleQuote": true,
+    "trailingComma": "es5",
+    "tabWidth": 2,
+    "semi": true,
+    "printWidth": 120,
+    "pugAttributeSeparator": "none",
+    "pugClassNotation": "literal",
+    "pugIdNotation": "literal",
+    "pugSortAttributes": "asc",
+    "pugWrapAttributesThreshold": 1
+}

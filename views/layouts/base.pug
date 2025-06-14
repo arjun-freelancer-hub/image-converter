@@ -1,0 +1,81 @@
+doctype html
+html(lang="en")
+    head
+        meta(charset="UTF-8")
+        meta(name="viewport", content="width=device-width, initial-scale=1.0")
+        title= title
+        block styles
+            script(src="https://cdn.tailwindcss.com")
+            link(rel="stylesheet", href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css", type="text/css")
+            script(src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js")
+            style.
+                .dropzone .dz-preview.dz-image-preview {
+                    background: transparent;
+                }
+                .dropzone .dz-preview .dz-image {
+                    border-radius: 0.5rem;
+                }
+                .dropzone .dz-preview .dz-details {
+                    color: #374151;
+                }
+                .dropzone .dz-preview .dz-remove {
+                    color: #EF4444;
+                    font-weight: 500;
+                }
+                .dropzone .dz-preview .dz-remove:hover {
+                    color: #DC2626;
+                }
+                .dz-preview.dz-error {
+                    border: 2px solid #dc2626 !important;
+                    box-shadow: 0 0 0 2px #dc262633;
+                }
+                .dz-preview .dz-status {
+                    margin-top: 0.5rem;
+                    text-align: center;
+                }
+                .dz-preview .dz-download-btn {
+                    display: none;
+                    margin: 0.5rem auto 0 auto;
+                    background: #4f46e5;
+                    color: #fff;
+                    border-radius: 0.375rem;
+                    padding: 0.25rem 0.75rem;
+                    font-size: 0.875rem;
+                    cursor: pointer;
+                }
+                .dz-preview.dz-success .dz-download-btn {
+                    display: block;
+                }
+                .dz-preview:hover .dz-download-btn {
+                    display: block;
+                }
+                .dz-preview .dz-error-message {
+                    color: #dc2626;
+                    text-align: center;
+                    font-size: 0.875rem;
+                    margin-top: 0.25rem;
+                }
+                .dropzone .dz-preview {
+                    display: inline-block;
+                    vertical-align: top;
+                }
+                .dropzone.has-previews {
+                    display: grid !important;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 1.5rem;
+                }
+                @media (min-width: 640px) {
+                    .dropzone.has-previews {
+                        grid-template-columns: repeat(3, minmax(0, 1fr));
+                    }
+                }
+                @media (min-width: 768px) {
+                    .dropzone.has-previews {
+                        grid-template-columns: repeat(4, minmax(0, 1fr));
+                    }
+                }
+
+    body(class="bg-gray-100 min-h-screen")
+        block content
+
+        block scripts 

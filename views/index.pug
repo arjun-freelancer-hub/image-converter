@@ -1,0 +1,276 @@
+extends layouts/base
+
+block content
+    .container.mx-auto.px-4.py-8
+        include partials/header
+
+        .max-w-4xl.mx-auto
+            .bg-white.rounded-lg.shadow-lg.p-6.mb-6
+                include components/dropzone
+                include components/format-selector
+                include components/action-buttons
+
+            include components/status
+
+        include partials/footer
+
+block scripts
+    script.
+        Dropzone.autoDiscover = false;
+        
+        const dropzone = new Dropzone("#imageDropzone", {
+            url: "/convert-single",
+            autoProcessQueue: false,
+            acceptedFiles: "image/*",
+            addRemoveLinks: true,
+            dictDefaultMessage: "Drag and drop images here or click to select",
+            maxFiles: Infinity,
+            dictMaxFilesExceeded: '',
+            previewTemplate: `
+                <div class="dz-preview dz-file-preview flex flex-col items-center p-2">
+                    <div class="dz-image relative group">
+                        <img data-dz-thumbnail class="rounded-lg" />
+                    </div>
+                    <div class="dz-details mt-2">
+                        <div class="dz-filename"><span data-dz-name></span></div>
+                        <div class="dz-size"><span data-dz-size></span></div>
+                    </div>
+                    <div class="dz-status text-xs mt-1 text-gray-500"></div>
+                    <button type="button" class="dz-download-btn mt-2 w-full bg-indigo-600 text-white px-4 py-1 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hidden">Download</button>
+                    <div class="dz-error-message"></div>
+                    <div class="dz-progress" style="display:none;"><span class="dz-upload" data-dz-uploadprogress></span></div>
+                </div>
+            `
+        });
+
+        // Hide progress bar after file is added
+        dropzone.on('addedfile', function(file) {
+            // Add grid class to dropzone if previews exist
+            if (dropzone.getAcceptedFiles().length > 0) {
+                dropzone.element.classList.add('has-previews');
+            }
+            const progress = file.previewElement.querySelector('.dz-progress');
+            if (progress) progress.style.display = 'none';
+            // Add status property
+            file.statusText = 'Waiting';
+            updateFileStatus(file, 'Waiting');
+            // Remove error class if re-added
+            file.previewElement.classList.remove('dz-error');
+            file.previewElement.classList.remove('dz-success');
+            // Hide download button
+            const downloadBtn = file.previewElement.querySelector('.dz-download-btn');
+            if (downloadBtn) downloadBtn.style.display = 'none';
+        });
+
+        function updateFileStatus(file, status, errorMsg) {
+            file.statusText = status;
+            const statusDiv = file.previewElement.querySelector('.dz-status');
+            const errorDiv = file.previewElement.querySelector('.dz-error-message');
+            if (statusDiv) {
+                if (status === 'Converted') {
+                    statusDiv.innerHTML = '<span class="text-green-600 font-semibold">✓ Converted</span>';
+                } else if (status === 'Converting...') {
+                    statusDiv.innerHTML = '<span class="text-blue-600">Converting...</span>';
+                } else if (status === 'Failed') {
+                    statusDiv.innerHTML = '<span class="text-red-600">Failed</span>';
+                } else {
+                    statusDiv.textContent = '';
+                }
+            }
+            if (errorDiv) {
+                if (status === 'Failed' && errorMsg) {
+                    errorDiv.textContent = errorMsg;
+                } else {
+                    errorDiv.textContent = '';
+                }
+            }
+            // Highlight error
+            if (status === 'Failed') {
+                file.previewElement.classList.add('dz-error');
+                file.previewElement.classList.remove('dz-success');
+            } else if (status === 'Converted') {
+                file.previewElement.classList.remove('dz-error');
+                file.previewElement.classList.add('dz-success');
+            } else {
+                file.previewElement.classList.remove('dz-error');
+                file.previewElement.classList.remove('dz-success');
+            }
+            // Show/hide download button and always attach handler
+            const downloadBtn = file.previewElement.querySelector('.dz-download-btn');
+            if (downloadBtn) {
+                if (status === 'Converted') {
+                    downloadBtn.style.display = 'block';
+                    downloadBtn.onclick = () => downloadSingle(file.name.replace(/\.[^.]+$/, '') + '.' + formatSelect.value.toLowerCase());
+                } else {
+                    downloadBtn.style.display = 'none';
+                    downloadBtn.onclick = null;
+                }
+            }
+        }
+
+        async function clearDropzonePreviews() {
+            dropzone.removeAllFiles(true);
+            dropzone.element.classList.remove('has-previews');
+        }
+
+        const convertAllBtn = document.getElementById('convertAllBtn');
+        const downloadAllBtn = document.getElementById('downloadAllBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        const formatSelect = document.getElementById('format');
+        const errorDiv = document.getElementById('error');
+        const loadingDiv = document.getElementById('loading');
+
+        let conversionResultsData = {
+            successful: [],
+            failed: []
+        };
+        let convertedBlobs = {}; // { convertedName: Blob }
+        let zipBlob = null;
+
+        function showDownloadAllBtn(show) {
+            if (show) {
+                downloadAllBtn.classList.remove('hidden');
+                clearAllBtn.classList.remove('hidden');
+            } else {
+                downloadAllBtn.classList.add('hidden');
+                clearAllBtn.classList.add('hidden');
+            }
+        }
+
+        // Download single file from convertedBlobs
+        async function downloadSingle(convertedName) {
+            try {
+                const blob = convertedBlobs[convertedName];
+                if (!blob) throw new Error('Converted file not found.');
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = convertedName;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                errorDiv.classList.remove('hidden');
+                errorDiv.querySelector('p').textContent = error.message;
+            }
+        }
+
+        // Download all as zip
+        downloadAllBtn.addEventListener('click', async function() {
+            if (!zipBlob) return;
+            const url = window.URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'converted_images.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        });
+
+        // Convert all files
+        convertAllBtn.addEventListener('click', async function() {
+            const files = dropzone.getAcceptedFiles();
+            if (files.length === 0) return;
+
+            const formData = new FormData();
+            files.forEach(file => {
+                formData.append('files', file);
+                updateFileStatus(file, 'Converting...');
+            });
+            formData.append('format', formatSelect.value);
+
+            // Show loading state
+            convertAllBtn.disabled = true;
+            loadingDiv.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+            convertedBlobs = {};
+            zipBlob = null;
+            showDownloadAllBtn(false);
+
+            try {
+                // Fetch the zip
+                const response = await fetch('/convert-batch', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Conversion failed');
+                }
+
+                // Save the zip blob for Download All
+                zipBlob = await response.blob();
+
+                // Get conversion results
+                const resultsResponse = await fetch('/conversion-results');
+                conversionResultsData = await resultsResponse.json();
+
+                // For each successful file, fetch its single conversion and store blob
+                for (const file of conversionResultsData.successful) {
+                    // Find the original file in dropzone
+                    const dzFile = files.find(f => f.name === file.originalName);
+                    if (!dzFile) continue;
+                    const singleForm = new FormData();
+                    singleForm.append('file', dzFile);
+                    singleForm.append('format', formatSelect.value);
+                    // Fetch the converted file
+                    const singleResp = await fetch('/convert-single', {
+                        method: 'POST',
+                        body: singleForm
+                    });
+                    if (singleResp.ok) {
+                        const blob = await singleResp.blob();
+                        convertedBlobs[file.convertedName] = blob;
+                        updateFileStatus(dzFile, 'Converted');
+                        // Attach download handler
+                        const downloadBtn = dzFile.previewElement.querySelector('.dz-download-btn');
+                        if (downloadBtn) {
+                            downloadBtn.onclick = () => downloadSingle(file.convertedName);
+                            downloadBtn.style.display = 'block';
+                        }
+                    } else {
+                        updateFileStatus(dzFile, 'Failed', 'Conversion failed');
+                    }
+                }
+
+                // For failed files
+                for (const file of conversionResultsData.failed) {
+                    const dzFile = files.find(f => f.name === file.filename);
+                    if (dzFile) updateFileStatus(dzFile, 'Failed', file.error);
+                }
+
+                // Show Download All button if there are successful conversions
+                showDownloadAllBtn(conversionResultsData.successful.length > 0);
+
+            } catch (error) {
+                errorDiv.classList.remove('hidden');
+                errorDiv.querySelector('p').textContent = error.message;
+            } finally {
+                convertAllBtn.disabled = false;
+                loadingDiv.classList.add('hidden');
+            }
+        });
+
+        // Clear All button handler
+        clearAllBtn.addEventListener('click', function() {
+            dropzone.removeAllFiles(true);
+            showDownloadAllBtn(false);
+            dropzone.element.classList.remove('has-previews');
+        });
+
+        // Make downloadSingle available globally
+        window.downloadSingle = downloadSingle;
+
+        // Add custom styling for Dropzone remove link
+        const style = document.createElement('style');
+        style.innerHTML = `.dz-remove { @apply mt-2 inline-block bg-red-500 text-white px-3 py-1 rounded cursor-pointer hover:bg-red-700; }`;
+        document.head.appendChild(style);
+
+        dropzone.on('removedfile', function() {
+            if (dropzone.getAcceptedFiles().length === 0) {
+                dropzone.element.classList.remove('has-previews');
+            }
+        });

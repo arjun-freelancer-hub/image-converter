@@ -1,0 +1,10 @@
+.dropzone-wrapper.border-2.border-gray-300.rounded-md.bg-white.mb-4.flex.items-center.justify-center
+    form#imageDropzone(
+        class="dropzone w-full bg-transparent"
+        action="/convert-batch"
+        method="post"
+        enctype="multipart/form-data"
+        style="border:none; background:none; min-height:180px;"
+    )
+        .fallback
+            input(name="files", type="file", multiple) 
