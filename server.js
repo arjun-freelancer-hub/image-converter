@@ -146,7 +146,6 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
 
         // Handle archive errors
         archive.on('error', (err) => {
-            console.error('Archive error:', err);
             if (!res.headersSent) {
                 res.status(500).json({ error: 'Error creating zip archive' });
             }
@@ -207,7 +206,6 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
                     file.buffer = null;
 
                 } catch (error) {
-                    console.error(`Error converting ${file.originalname}:`, error);
                     results.failed.push({
                         filename: file.originalname,
                         error: error.message
@@ -227,9 +225,8 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
         // Add a results summary to the archive
         const summary = {
             total: req.files.length,
-            successful: results.successful.length,
-            failed: results.failed.length,
-            failedFiles: results.failed
+            successful: results.successful,
+            failed: results.failed
         };
 
         archive.append(JSON.stringify(summary, null, 2), { name: 'conversion_summary.json' });
@@ -238,7 +235,6 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
         await archive.finalize();
 
     } catch (error) {
-        console.error('Batch conversion error:', error);
         if (!res.headersSent) {
             res.status(500).json({
                 error: error.message || 'Error converting images',
