@@ -237,9 +237,6 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
         // Finalize the archive
         await archive.finalize();
 
-        // Store results in memory for the frontend to access
-        req.app.locals.lastConversionResults = results;
-
     } catch (error) {
         console.error('Batch conversion error:', error);
         if (!res.headersSent) {
@@ -249,12 +246,6 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
             });
         }
     }
-});
-
-// Get conversion results
-app.get('/conversion-results', (req, res) => {
-    const results = req.app.locals.lastConversionResults || { successful: [], failed: [] };
-    res.json(results);
 });
 
 // Error handling middleware

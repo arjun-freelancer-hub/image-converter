@@ -204,9 +204,16 @@ block scripts
                 // Save the zip blob for Download All
                 zipBlob = await response.blob();
 
-                // Get conversion results
-                const resultsResponse = await fetch('/conversion-results');
-                conversionResultsData = await resultsResponse.json();
+                // Extract conversion_summary.json from the zip using JSZip
+                const jszipScript = document.createElement('script');
+                jszipScript.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+                document.head.appendChild(jszipScript);
+                await new Promise(resolve => { jszipScript.onload = resolve; });
+                const zip = await JSZip.loadAsync(zipBlob);
+                const summaryFile = zip.file('conversion_summary.json');
+                if (!summaryFile) throw new Error('conversion_summary.json not found in zip');
+                const summaryText = await summaryFile.async('string');
+                conversionResultsData = JSON.parse(summaryText);
 
                 // For each successful file, fetch its single conversion and store blob
                 for (const file of conversionResultsData.successful) {
