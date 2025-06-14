@@ -111,9 +111,20 @@ app.post('/convert-single', upload.single('file'), async (req, res) => {
 
 // Handle batch image conversion
 app.post('/convert-batch', upload.array('files'), async (req, res) => {
+    // Set a longer timeout for this route
+    req.setTimeout(300000); // 5 minutes timeout
+
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'No files provided' });
+        }
+
+        // Limit the number of files that can be processed at once
+        const MAX_FILES = 50;
+        if (req.files.length > MAX_FILES) {
+            return res.status(400).json({
+                error: `Too many files. Maximum ${MAX_FILES} files allowed per batch.`
+            });
         }
 
         const targetFormat = req.body.format?.toLowerCase() || 'png';
@@ -123,14 +134,23 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
             return res.status(400).json({ error: 'Target format not supported' });
         }
 
-        // Create a zip archive
+        // Create a zip archive with a smaller chunk size
         const archive = archiver('zip', {
-            zlib: { level: 9 } // Maximum compression
+            zlib: { level: 6 }, // Reduced compression level for better performance
+            store: true // Store files without compression for better performance
         });
 
         // Set the response headers
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', 'attachment; filename=converted_images.zip');
+
+        // Handle archive errors
+        archive.on('error', (err) => {
+            console.error('Archive error:', err);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Error creating zip archive' });
+            }
+        });
 
         // Pipe the archive to the response
         archive.pipe(res);
@@ -141,23 +161,35 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
             failed: []
         };
 
-        // Process files in chunks to avoid memory issues
-        const chunkSize = 10;
+        // Process files in smaller chunks to reduce memory usage
+        const chunkSize = 5; // Reduced chunk size
         for (let i = 0; i < req.files.length; i += chunkSize) {
             const chunk = req.files.slice(i, i + chunkSize);
             const chunkPromises = chunk.map(async (file) => {
                 try {
-                    // Convert the image using sharp
-                    let sharpInstance = sharp(file.buffer);
+                    // Check file size before processing
+                    const maxFileSize = 10 * 1024 * 1024; // 10MB limit
+                    if (file.size > maxFileSize) {
+                        throw new Error(`File ${file.originalname} is too large. Maximum size is 10MB.`);
+                    }
+
+                    // Convert the image using sharp with memory optimization
+                    let sharpInstance = sharp(file.buffer, {
+                        limitInputPixels: 100000000, // Limit input pixels to prevent memory issues
+                        sequentialRead: true // Enable sequential reading for better memory usage
+                    });
 
                     // Handle transparency for JPEG conversion
                     if (targetFormat === 'jpg' || targetFormat === 'jpeg') {
                         sharpInstance = sharpInstance.flatten({ background: { r: 255, g: 255, b: 255 } });
                     }
 
-                    // Convert to the target format
+                    // Convert to the target format with quality settings
                     const convertedBuffer = await sharpInstance
-                        .toFormat(targetFormat)
+                        .toFormat(targetFormat, {
+                            quality: 80, // Reduced quality for better performance
+                            effort: 4 // Reduced effort for better performance
+                        })
                         .toBuffer();
 
                     // Generate output filename
@@ -171,6 +203,9 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
                         convertedName: outputFilename
                     });
 
+                    // Clear the buffer to free memory
+                    file.buffer = null;
+
                 } catch (error) {
                     console.error(`Error converting ${file.originalname}:`, error);
                     results.failed.push({
@@ -182,6 +217,11 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
 
             // Wait for the current chunk to complete before processing the next
             await Promise.all(chunkPromises);
+
+            // Force garbage collection after each chunk
+            if (global.gc) {
+                global.gc();
+            }
         }
 
         // Add a results summary to the archive
@@ -203,7 +243,10 @@ app.post('/convert-batch', upload.array('files'), async (req, res) => {
     } catch (error) {
         console.error('Batch conversion error:', error);
         if (!res.headersSent) {
-            res.status(500).json({ error: error.message || 'Error converting images' });
+            res.status(500).json({
+                error: error.message || 'Error converting images',
+                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            });
         }
     }
 });
